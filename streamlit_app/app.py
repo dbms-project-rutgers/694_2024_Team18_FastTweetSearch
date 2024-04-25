@@ -22,8 +22,8 @@ endpoint = "cb.u5tbreifenk4gngi.cloud.couchbase.com"
 username = "DBMS"
 password = "Dbms@123"
 bucket_name = "dbmsProject"
-scope_name = "twitter_new"
-collection_name = "tweet_data"
+scope_name = "twitter"
+collection_name = "tweets"
 
 PGHOST = "twitter.postgres.database.azure.com"
 PGUSER = "neeraj"
@@ -40,10 +40,22 @@ bucket = cluster.bucket(bucket_name)
 inventory_scope = bucket.scope(scope_name)
 cb_coll = inventory_scope.collection(collection_name)
 
-st.title("TwitSeeker: Search Engine for Twitter")
+st.markdown("<h1 style='text-align: center;'>TwitSeeker: Search Engine for Twitter</h1>", unsafe_allow_html=True)
+
+# image_path = "wordcloud (1).png"  
+# col1, col2, col3 = st.columns([1,1,1]) 
+# with col2:  
+#     st.image(image_path)
+
+gif_path = "Twitter-Gif.gif"  
+col1, col2, col3 = st.columns([1,1,1]) 
+with col2:  
+    st.image(gif_path)
+
+
 search_type = st.selectbox(
     "Search by:",
-    ("Tweets", "Hashtag", "Username"),
+    ( "Username", "Hashtag", "Tweets"),
     index=0  
 )
 
@@ -57,14 +69,15 @@ def search_by_hashtag(hashtag, start_datetime, end_datetime, sort_by, bucket_nam
     order_by = sort_options[sort_by]
 
     sql_query = f"""
-    SELECT tweet_data.created_at, tweet_data.favorite_count, tweet_data.hashtags, tweet_data.id,
-           tweet_data.is_retweet, tweet_data.original_tweet_id, tweet_data.reply_count,
-           tweet_data.retweet_count, tweet_data.retweeted_status, tweet_data.text, tweet_data.urls, tweet_data.user_id
+    SELECT tweets.created_at, tweets.favorite_count, tweets.hashtags, tweets.id,
+    tweets.is_retweet, tweets.original_tweet_id, tweets.reply_count,
+    tweets.retweet_count, tweets.retweeted_status, tweets.text, tweets.urls, tweets.user_id
     FROM `{bucket_name}`.`{scope_name}`.`{collection_name}`
-    WHERE ANY h IN SPLIT(SUBSTR(hashtags, 2, LENGTH(hashtags) - 2), "', '") SATISFIES h = {hashtag_quoted} END
-    AND tweet_data.created_at BETWEEN '{start_datetime_str}' AND '{end_datetime_str}'
+    WHERE tweets.hashtags LIKE '%{hashtag}%'
+    AND tweets.created_at BETWEEN '{start_datetime_str}' AND '{end_datetime_str}'
     ORDER BY {order_by};
     """
+
     try:
         row_iter = inventory_scope.query(sql_query)
         results = [row for row in row_iter]
@@ -81,15 +94,15 @@ def search_by_text(search_text, start_datetime, end_datetime, sort_by, bucket_na
     like_pattern = f"%{search_text}%"
     start_datetime_str = start_datetime.strftime("%Y-%m-%d %H:%M:%S+00:00")
     end_datetime_str = end_datetime.strftime("%Y-%m-%d %H:%M:%S+00:00")
-    order_by = sort_options[sort_by] 
+    order_by = sort_options[sort_by]
 
     sql_query = f"""
-    SELECT tweet_data.created_at, tweet_data.favorite_count, tweet_data.hashtags, tweet_data.id,
-           tweet_data.is_retweet, tweet_data.original_tweet_id, tweet_data.reply_count,
-           tweet_data.retweet_count, tweet_data.retweeted_status, tweet_data.text, tweet_data.urls, tweet_data.user_id
+    SELECT tweets.created_at, tweets.favorite_count, tweets.hashtags, tweets.id,
+           tweets.is_retweet, tweets.original_tweet_id, tweets.reply_count,
+           tweets.retweet_count, tweets.retweeted_status, tweets.text, tweets.urls, tweets.user_id
     FROM `{bucket_name}`.`{scope_name}`.`{collection_name}`
-    WHERE tweet_data.text LIKE '{like_pattern}'
-    AND tweet_data.created_at BETWEEN '{start_datetime_str}' AND '{end_datetime_str}'
+    WHERE tweets.text LIKE '{like_pattern}'
+    AND tweets.created_at BETWEEN '{start_datetime_str}' AND '{end_datetime_str}'
     ORDER BY {order_by};
     """
 
@@ -99,6 +112,10 @@ def search_by_text(search_text, start_datetime, end_datetime, sort_by, bucket_na
         if row_iter:
             results = [row for row in row_iter]
         df = pd.DataFrame(results)
+        
+        df = df.drop_duplicates(subset='id')
+        df['View Retweets'] = df['retweet_count'].apply(lambda x: "View" if x > 0 else "")
+
 
         elapsed_time = time.time() - start_time
         total_count = len(df)
@@ -106,6 +123,7 @@ def search_by_text(search_text, start_datetime, end_datetime, sort_by, bucket_na
     except Exception as e:
         print("Error during database query: " + str(e))
         return pd.DataFrame(), 0, 0
+
 
 
 
@@ -119,7 +137,7 @@ def search_by_username(username):
     )
     cur = conn.cursor()
 
-    cur.execute("SELECT id, name, screen_name, location, url, followers_count, friends_count, statuses_count, verified, created_at FROM users_data WHERE name = %s", (username,))
+    cur.execute("SELECT id, name, screen_name, location, url, followers_count, friends_count, statuses_count, verified, created_at FROM users_final WHERE name = %s", (username,))
     user_details = cur.fetchone()
     
     if not user_details:
@@ -142,16 +160,15 @@ def search_by_username(username):
     
     start_time = time.time()
     tweet_query = f"""
-    SELECT tweet_data.created_at, tweet_data.favorite_count, tweet_data.hashtags, tweet_data.id,
-           tweet_data.is_retweet, tweet_data.original_tweet_id, tweet_data.reply_count,
-           tweet_data.retweet_count, tweet_data.retweeted_status, tweet_data.text, tweet_data.urls, tweet_data.user_id
+    SELECT tweets.id, tweets.text, tweets.user_id
     FROM `{bucket_name}`.`{scope_name}`.`{collection_name}`
-    WHERE tweet_data.user_id = {user_data["ID"]};
+    WHERE tweets.user_id = {user_data["ID"]};
     """
     try:
         tweet_results = inventory_scope.query(tweet_query)
         results = [row for row in tweet_results]
         df = pd.DataFrame(results)
+        df = df.drop_duplicates(subset='id')
         elapsed_time = time.time() - start_time
         cur.close()
         conn.close()
@@ -164,26 +181,47 @@ def search_by_username(username):
 
 def get_tweets_by_user(user_id, bucket_name, scope_name, collection_name):
     sql_query = f"""
-    SELECT tweet_data.created_at, tweet_data.text, tweet_data.user_id
+    SELECT tweets.created_at, tweets.text, tweets.user_id
     FROM `{bucket_name}`.`{scope_name}`.`{collection_name}`
-    WHERE tweet_data.user_id = {user_id}
-    ORDER BY tweet_data.created_at DESC;
+    WHERE tweets.user_id = {user_id}
+    ORDER BY tweets.created_at DESC;
     """
     try:
         row_iter = inventory_scope.query(sql_query)
         results = [row for row in row_iter]
-        return pd.DataFrame(results)
+        users_df = pd.DataFrame(results)
+        users_df = users_df.drop_duplicates(subset=['created_at'])
+        return users_df
     except Exception as e:
         print(f"Error fetching tweets for user {user_id}: {str(e)}")
         return pd.DataFrame()
     finally:
         pass
 
+    
+def get_retweets_info(original_tweet_id, inventory_scope):
+    try:
+        query = f"""
+        SELECT t.created_at AS retweet_time, t.user_id, t.text AS retweet_text
+        FROM `{bucket_name}`.`{scope_name}`.`{collection_name}` AS t
+        WHERE t.original_tweet_id = {original_tweet_id} AND t.is_retweet = 'True';
+        """
+
+        row_iter = inventory_scope.query(query)
+        results = [row for row in row_iter] if row_iter else []
+        retweets_df = pd.DataFrame(results)
+        
+        
+        return retweets_df
+    except Exception as e:
+        print(f"Failed to retrieve retweets for the original tweet ID {original_tweet_id}: {str(e)}")
+        return pd.DataFrame()
 
 
 
-default_start_date = datetime.now() - timedelta(days=7)
-default_end_date = datetime.now()
+
+default_start_date = datetime(2020, 4, 1)
+default_end_date = datetime(2020, 4, 30)
 
 col1, col2, col3, col4 = st.columns(4)
 with col1:
@@ -210,10 +248,11 @@ sort_options = {
 }
 selected_sort = st.selectbox('Sort by:', list(sort_options.keys()))
 
-if 'results_df' not in st.session_state:
-    st.session_state.results_df = pd.DataFrame()
 
 if st.button('Search'):
+    if 'results_df' not in st.session_state:
+        st.session_state.results_df = pd.DataFrame()
+        
     if search_type == "Hashtag":
         results_df, total_count, elapsed_time = search_by_hashtag(query, start_datetime, end_datetime, selected_sort, bucket_name, scope_name, collection_name)
         if not results_df.empty:
@@ -246,6 +285,10 @@ if st.button('Search'):
                 st.write("No tweets found for this user.")
 
 
+
+if 'results_df' not in st.session_state:
+    st.session_state.results_df = pd.DataFrame()
+
 if not st.session_state.results_df.empty:
     selected_indices = st.multiselect(
         "Select tweets to see more from the authors:",
@@ -266,7 +309,31 @@ if not st.session_state.results_df.empty:
                     st.write(f"No additional tweets found for user ID {user_id}.")
 else:
     st.session_state.results_df = pd.DataFrame()
-    st.write("No results found or search not yet performed.")
+
+
+
+if not st.session_state.results_df.empty:
+    selected_indices = st.multiselect(
+        "Select tweets to see about retweets:",
+        st.session_state.results_df.index,
+        format_func=lambda x: f"Tweet ID {st.session_state.results_df.loc[x, 'id']}"
+    )
+    st.dataframe(st.session_state.results_df.head(num_tweets_to_display))
+
+    if selected_indices:
+        if st.button('Show Retweet Information of the Selected Tweet'):
+            for selected_index in selected_indices:
+                tweet_id = st.session_state.results_df.loc[selected_index, 'id']
+                retweets_df = get_retweets_info(tweet_id, inventory_scope) 
+                if not retweets_df.empty:
+                    st.subheader(f"Retweet information for Tweet ID {tweet_id}:")
+                    st.dataframe(retweets_df)
+                else:
+                    st.write(f"No retweet information found for Tweet ID {tweet_id}.")
+else:
+    st.session_state.results_df = pd.DataFrame()
+
+
 
 
 
@@ -283,7 +350,7 @@ def get_top_followed_users():
     cur = conn.cursor()
     cur.execute("""
         SELECT name, screen_name, followers_count
-        FROM users_data
+        FROM users_final
         ORDER BY followers_count DESC
         LIMIT 10;
     """)
@@ -321,7 +388,7 @@ def get_top_creator_locations():
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT location, COUNT(*) AS user_count
-                FROM users_data
+                FROM users_final
                 WHERE location IS NOT NULL AND location != 'MISSING_INFORMATION'
                 GROUP BY location
                 ORDER BY user_count DESC
@@ -366,8 +433,8 @@ def get_top_hashtags():
     hashtag_query = f"""
     SELECT RAW h
     FROM `{bucket_name}`.`{scope_name}`.`{collection_name}`
-    UNNEST SPLIT(SUBSTR(tweet_data.hashtags, 2, LENGTH(tweet_data.hashtags) - 2), "', '") AS h
-    WHERE tweet_data.hashtags IS NOT MISSING AND tweet_data.hashtags != '[]'
+    UNNEST SPLIT(SUBSTR(tweets.hashtags, 2, LENGTH(tweets.hashtags) - 2), "', '") AS h
+    WHERE tweets.hashtags IS NOT MISSING AND tweets.hashtags != '[]'
     """
     
     try:
