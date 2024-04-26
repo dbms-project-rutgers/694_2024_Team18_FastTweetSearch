@@ -3,16 +3,114 @@ import time
 from collections import OrderedDict
 from collections.abc import MutableMapping
 
-from util import (
-    _TTLLink,
-    _TTLLinkedList,
-)
+import redis
+import json
+import pandas as pd
+import random
 
-__all__ = (
-    "Base",
-    "LRUCache",
-    "TTLCache",
-)
+# from util import (
+#     _TTLLink,
+#     _TTLLinkedList,
+# )
+
+__all__ = ("Base", "LRUCache", "TTLCache", "RedisCache")
+
+# from collections import OrderedDict
+
+
+class _TTLLink:
+    """Link in TTL Doubly Linked List.
+
+    Attributes:
+        key (hashable): Cache Item Key.
+        expiry (int): Item Expiry Time.
+        next (_TTLLink): Next Link in the DLL.
+        prev (_TTLLink): Prev Link in the DLL. None
+        if no previous link exists.
+    """
+
+    def __init__(self, key=None, expiry=None, nxt=None, prev=None):
+        self.key = key
+        self.expiry = expiry
+        self.next = nxt
+        self.prev = prev
+
+
+class _TTLLinkedList:
+    """Doubly Linked List of TTL Links.
+
+    Attributes:
+        head (_TTLLink): Head of the Linked List.
+    """
+
+    def __init__(self, head=None) -> None:
+        self.__head = head
+        # 'TTLCache' only inserts at the end of the
+        # list. Reference to the tail of the list
+        # for O(1) insertions.
+        self.__tail = head
+
+    @property
+    def head(self):
+        """Returns the head of the linked list."""
+        return self.__head
+
+    def insert(self, link):
+        """Insert a new link at the end of the linked list.
+
+        Args:
+            link (_TTLLink): `_TTLLink` to insert.
+        """
+        if self.__head:
+            link.prev = self.__tail
+            link.prev.next = self.__tail = link
+        else:
+            self.__head = self.__tail = link
+
+    def remove(self, link):
+        """Remove a link from the linked list.
+
+        Args:
+            link (_TTLLink): `_TTLLink` to remove.
+        """
+        if self.__head == link:
+            self.__head = self.__head.next
+        elif self.__tail == link:
+            self.__tail = self.__tail.prev
+        else:
+            link.prev.next = link.next
+            link.next.prev = link.prev
+
+
+class RedisCache:
+    def __init__(self, host="localhost", port=6379, db=0):
+        """Initialize Redis connection"""
+        self.redis = redis.StrictRedis(host=host, port=port, db=db)
+
+    def exists(self, key):
+        """Check if the key exists in Redis"""
+        return self.redis.exists(key)
+
+    def set(self, key, obj, expire=None):
+        """Store the object in Redis, optionally setting an expiry time"""
+        if isinstance(obj, pd.DataFrame):
+            self.redis.set(key, obj.to_json())
+        elif isinstance(obj, (dict, list)):
+            obj = json.dumps(obj)
+        else:
+            self.redis.set(key, obj, ex=expire, nx=True)
+
+    def get(self, key):
+        """Retrieve the object from Redis, if available"""
+        # obj = self.redis.get(key)
+        # if obj:
+        #     obj = json.loads(obj)
+        #     return obj
+        return self.redis.get(key)
+
+    def delete(self, key):
+        """Delete the object from Redis"""
+        self.redis.delete(key)
 
 
 class Base(MutableMapping):
@@ -149,6 +247,7 @@ class LRUCache(Base):
     def __init__(self, capacity, callback=None):
         Base.__init__(self, capacity, callback)
         self._lru = OrderedDict()
+        self._id = random.randint(0, 1000)
 
     def __getitem__(self, _key):
         """Retrieves item from the cache.
@@ -216,6 +315,14 @@ class LRUCache(Base):
         else:
             if self._callback:
                 self._callback(_key, _value)
+
+    def exists(self, _key):
+        return _key in self._lru
+
+    def print_all(self):
+        # for key in self._links:
+        #     print(key, self._links[key])
+        return self._lru.items()
 
 
 class TTLCache(LRUCache):
@@ -330,6 +437,14 @@ class TTLCache(LRUCache):
     @expire(_time=time.monotonic)
     def __len__(self):
         return Base.__len__(self)
+
+    def exists(self, _key):
+        return _key in self._links
+
+    def print_all(self):
+        # for key in self._links:
+        #     print(key, self._links[key])
+        return self._links.items()
 
     def _evict(self):
         """Handle evictions when Cache exceeds capacity.
