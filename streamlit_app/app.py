@@ -285,8 +285,16 @@ sort_options = {
     "Most Replies": "reply_count DESC",
     "Least Replies": "reply_count ASC",
 }
-selected_sort = st.selectbox("Sort by:", list(sort_options.keys()))
 
+sort_options_cached ={
+    "Most Recent": ['created_at', False],
+    "Least Recent": ['created_at', True],
+    "Most Favorited": ['favorite_count', False],
+    "Least Favorited": ['favorite_count', True],
+    "Most Replies": ['reply_count', False],
+    "Least Replies": ['reply_count', True],
+}
+selected_sort = st.selectbox("Sort by:", list(sort_options.keys()))
 
 if st.button("Search"):
     if "results_df" not in st.session_state:
@@ -312,6 +320,7 @@ if st.button("Search"):
         else:
             start = time.time()
             results_df = cached_result
+            results_df = results_df.sort_values(by=sort_options_cached[selected_sort][0], ascending=sort_options_cached[selected_sort][1])
             total_count = len(results_df)
             elapsed_time = cache_time
 
@@ -337,6 +346,8 @@ if st.button("Search"):
             st.session_state.inmemory_cache[query] = st.session_state.results_df
         else:
             st.session_state.results_df = cached_result
+            st.session_state.results_df = st.session_state.results_df.sort_values(by=sort_options_cached[selected_sort][0], ascending=sort_options_cached[selected_sort][1])
+
             elapsed_time = cache_time
             total_count = len(st.session_state.results_df)
 
@@ -351,6 +362,7 @@ if st.button("Search"):
             st.session_state.inmemory_cache[query] = (user_data, tweets_df)
         else:
             user_data, tweets_df = cached_result
+            # tweets_df = tweets_df.sort_values(by=sort_options_cached[selected_sort][0], ascending=sort_options_cached[selected_sort][1])
             query_time = cache_time
 
         if isinstance(user_data, str):
@@ -470,7 +482,6 @@ with st.expander("Top 10 Most Followed Users", expanded=False):
             df_top_users = get_top_followed_users()
             st.session_state.redis_cache.set("top_users", df_top_users)
     except Exception as e:
-        print(cached_result)
         raise e
 
     st.columns(3)[1].header("Top 10 Most Followed Users")
