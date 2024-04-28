@@ -1,7 +1,7 @@
 # FastTweetSearch
 
 *High level Architecture :*
-![Architecture](./assets/architecture.png)
+![Architecture](./assets/dbms_finals.png)
 
 Social media platforms like Twitter play a crucial role in understanding public opinions and trends in today's digital world. The massive amounts of data these platforms generate offer both challenges and opportunities for analysis in diverse areas. This project creates a system that efficiently stores and retrieves Twitter data, offering search features to pull insights from tweets. 
 
