@@ -3,15 +3,23 @@
 *High level Architecture :*
 ![Architecture](./assets/architecture.png)
 
+Social media platforms like Twitter play a crucial role in understanding public opinions and trends in today's digital world. The massive amounts of data these platforms generate offer both challenges and opportunities for analysis in diverse areas. This project creates a system that efficiently stores and retrieves Twitter data, offering search features to pull insights from tweets. 
 
-## PROJECT GOALS
+The end-to-end architecture of the Twitter Search Application with several stages:
+1. Dataset Ingestion: This is the initial phase where the Twitter dataset is collected and fed into the system.
+2. Data Processing Layer: Once ingested, the data undergoes a processing phase where it is curated and aggregated using parallel processing techniques. This step is crucial for preparing the data for storage and ensuring it is in the optimal format for querying and analysis.
+3. Data Models:
+- User Data Model (PostgreSQL): User-related data is structured and stored in a PostgreSQL relational database, which is suited for managing well-defined schema and relationships.
+- Tweets Data Model (Couchbase): Tweets, which may contain more varied and flexible data structures, are stored in Couchbase as a document. This non-relational database allows for efficient storage and retrieval of such data.
+- Caching Layer: A dual-cache approach enhances the system’s efficiency. An LRU cache with TTL is implemented to quickly access frequently searched queries, and a RedisCache holds top-level metrics for persistent data storage. This layer significantly decreases latency and improves user experience by reducing the load on the databases.
+- Streamlit UI Interface: The user interface, built with Streamlit, provides a seamless and interactive experience. It connects users to the search application, allowing them to perform complex queries.
 
-- **Summarize the Twitter Dataset**: Generate a detailed report covering the total number of users, tweets, and other key data facets like hashtags, mentions, and URLs.
+## Project Contribution
 
-- **Efficient Data Storage**: Store tweet information across two datastores (one relational for user data and one non-relational for tweets) for optimized access and querying, incorporating indexing strategies.
+| Student Name      | Contribution |
+| ----------------- | ------------ |
+| Tanya Khanna      | Complete search functionality and API architecture design/implementation, end-to-end Streamlit UI/UX design/implementation with DB connections. |
+| Raghav Dixit      | Overall architecture design, caching layer design/implementation, caching integration. |
+| Ojas Sharma       | Data cleaning, aggregating and processing (with multiprocessing implementation). |
+| Neeraj Chaudhari  | Data ingestion, Data storage (postgres/Couchbase Capella), Indexing on both DBs. |
 
-- **Implement a Cache System**: Design and implement a caching mechanism(from scratch) for frequently accessed data to improve retrieval times, with strategies for eviction, data staleness handling, and periodic checkpointing.
-
-- **Develop a Search Application**: Create a versatile search application capable of querying by string, hashtag, user, and time range, including drill-down features for detailed tweet metadata and providing top-level metrics.
-
-- **Performance Evaluation**: Conduct testing with a set of representative queries to measure performance metrics both with and without cache, aiming to demonstrate the effectiveness of the caching strategy and the efficiency of data retrieval.
